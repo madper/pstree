@@ -26,6 +26,9 @@ type ProcessTree map[ProcessID]*Process
 // ReadProcessInfo parses the /proc/pid/stat file to fill the struct.
 // /proc/pid/stat does not contain information about children -- only parents.
 // Linking children to parents is done in a later pass when we know about every process.
+
+var dirtyResult string
+
 func (proc *Process) ReadProcessInfo(pid ProcessID) (err error) {
 
 	filename := "/proc/" + string(pid) + "/stat"
@@ -45,10 +48,11 @@ func (proc *Process) ReadProcessInfo(pid ProcessID) (err error) {
 	// 25926 (annoy me.out) S 25906 31864 31842 ...
 	// 2nd entry is the name in parens, 4th is parent pid
 	// get the index of the first and last paren to grab process name
+	// Madper: I see no reason to limit the length.
 	first := bytes.IndexByte(line, '(')
-	last := bytes.LastIndex(line[:first+17], []byte(")"))
+	last := bytes.LastIndex(line, []byte(")"))
 	if first == -1 || last == -1 {
-		return errors.New("Can't parse " + filename)
+		return errors.New("1 Can't parse " + filename)
 	}
 
 	// don't take the parens with us
@@ -58,7 +62,7 @@ func (proc *Process) ReadProcessInfo(pid ProcessID) (err error) {
 	rest := line[last+4:]
 	last = bytes.IndexByte(rest, ' ')
 	if last == -1 {
-		return errors.New("Can't parse " + filename)
+		return errors.New("2 Can't parse " + filename)
 	}
 	proc.parent = ProcessID(rest[:last])
 	proc.pid = pid
@@ -110,7 +114,7 @@ func (processes ProcessTree) Populate() error {
 // PrintDepthFirst traverses the hash and recursively prints a parent's children.
 func (pids ProcessTree) PrintDepthFirst(pid ProcessID, depth int) string {
 	buffer := new(bytes.Buffer)
-	fmt.Fprintf(buffer, "%*s%v (%v)\n", depth, "", pids[pid].name, pid)
+	fmt.Fprintf(buffer, "%s ", pid)
 	for _, kid := range pids[pid].children {
 		fmt.Fprintf(buffer, pids.PrintDepthFirst(kid, depth+1))
 	}
